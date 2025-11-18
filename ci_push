@@ -1,0 +1,118 @@
+#!/bin/bash
+
+#if [[ -z "${GH_TOKEN}" ]]; then
+#	echo "Set the GH_TOKEN env variable."
+#	exit 1
+#fi
+
+RootSD=$(cd "$(dirname "$0")"; pwd)
+
+#set -e
+#set -o pipefail
+
+fn_upload()     { gh release upload ${2} ${3} -R ${1} --clobber; }
+fn_tag_is()     { gh release list --json tagName --jq '.[].tagName' -R ${1} | grep -q ${2}; }
+fn_tag_delete() { gh release delete ${2} --cleanup-tag -y -R ${1}; }
+fn_tag_create()
+{
+	echo "${4}" > note
+	gh release create ${2} -F ./note -t "${3}" -R ${1}
+	rm            note
+}
+
+repo_host="icarus-ai/download"
+
+__download_push()
+{
+	# echo git clone https://github.com/${user_name}/${repo_name}.git
+	#      git clone https://github.com/${user_name}/${repo_name}.git
+
+	cd ${RootSD}
+	case ${1} in # tag name
+		0.0.1) repo_name="test" ;;
+		0.0.2) repo_name="Chrome"   ;;
+		0.0.3) repo_name="MobileQQ" ;;
+		0.0.4) repo_name="sqlite"   ;;
+		0.0.5) repo_name="build_code" ;;
+		0.0.6)
+			repo_name="SDO AIA"
+			repo_host="icarus-ai/sdo_aia"
+		;;
+		*) exit ;;
+	esac
+
+	#echo "repo_host: |${repo_host}|"
+
+	echo "----- ---- upload_sh ---- -----"
+
+	repo_tag="v${1}"
+
+	if [[ "${repo_tag}" == "v0.0.1" ]] \
+	|| [[ "${repo_tag}" == "v0.0.5" ]] \
+	|| [[ "${repo_tag}" == "v0.0.6" ]]; then
+		repo_dest="${repo_name}"
+	else
+		repo_dest="download ${repo_name}"
+		repo_name="cache ${repo_name}"
+	fi
+
+	if fn_tag_is ${repo_host} ${repo_tag}; then
+		if [[ "${repo_tag}" == "v0.0.1" ]] \
+		|| [[ "${repo_tag}" == "v0.0.5" ]] \
+		|| [[ "${repo_tag}" == "v0.0.6" ]]; then
+			fn_tag_delete ${repo_host} ${repo_tag}
+			fn_tag_create ${repo_host} ${repo_tag} "${repo_name}" "${repo_dest}"
+		fi
+	else
+		fn_tag_create ${repo_host} ${repo_tag} "${repo_name}" "${repo_dest}"
+	fi
+
+	if [[ "${repo_tag}" == "v0.0.5" ]]; then
+		echo termux
+		git  clone ${3}
+		cd   termux-packages
+		bash scripts/generate-bootstraps.sh --architectures aarch64
+		t_name=bootstrap-aarch64-$(date "+%Y%m%d")_r1_ap7.zip
+		mv   bootstrap-aarch64.zip ${t_name}
+		echo upload ${repo_host} ${repo_tag} "${t_name}"
+		fn_upload   ${repo_host} ${repo_tag} "${t_name}"
+	elif [[ "${repo_tag}" == "v0.0.6" ]]; then
+		echo sdo aia
+		#bash                               code/run_build
+		#fn_upload ${repo_host} ${repo_tag} code/jp2image
+		#t_name=aia.$(date "+%Y%m%d").tar.gz
+		mv           code/run_aia .
+		bash              run_aia sdo_aia_48h
+		fn_upload  ${repo_host} ${repo_tag} run_down
+		fn_upload  ${repo_host} ${repo_tag} aia.jp2.tar.bz2
+		#fn_upload  ${repo_host} ${repo_tag} aia.jpg.tar.bz2
+		#fn_upload  ${repo_host} ${repo_tag} sdo_aia_48h.mp4
+	else
+		sleep 15
+		curl -o "${2}" "${3}"
+		fn_upload ${repo_host} ${repo_tag} "${2}"
+	fi
+
+	echo "----- ---- end upload_sh ---- -----"
+}
+
+clear
+
+# __download_push 0.0.1 "test"  "https://baidu.com"
+ 
+# __download_push 0.0.2 "Chrome 114.0.5735.196.apk" "https://dw.malavida.com/TUlXeXl6MGZFNnhQV1pxOWlxZjVuaHcvdyt2RkY4UkJZL1NIZXp2bnpWSDArNUR2YTFJU21IVm8xQ2lyMitsa0UvV25aVE54RjBF/S1hSRUlrTisvY1FoRExjcnBPSEVGeFVJYzdaS1dlMUgyVUh0ODJvYzkvZ3FuYXdDNTJ1MHhEelFISU53WTROR0FlK3Rwd2Q3aVpk/V3lXbXY5UStnc29MSVVoZFBnME93bGxlUDEveGdLdDBaRWJOUlBDQmlOTmZISitWZkNWcWo0eUttYWJFejFNYTlQVFNIZWJqQmUv/aDBnWGpFQitOcnRKVU96YWtpY2cyVjhQcVRBL25zcWMwOUtpUU5rS0E2WGhVNHJwUmpZQTFFMXdmbnVSUHV6TWJLbTNiMjViRGFP/Y20zdm1CREg5MXBZdmMzMlFBamJRdCtVL2lsR2NJc0pBZEZCdXRRS2JhM001dy9lU2l3WEN1L3VJSUFNNVBhQ2dxU2NvRVZYZGJr/RmZ5L1dPRDBFclNoYXROdGRlSWNhL0d5a2dMUHY4bDduWk4xaVZjbmppNkFuRjZzeFFiVVBVVFlwSUhndXRiMHpSMlJKUmd2b2xY/NzdsbFM1a1pQODZSYnNWWUdvT2poNmhlVDFpaXhTNklFODhNQWFQeVVuZ0FuL1JtZ2VIWXJQNDE2ejhZVXBzdHJjVkFQRzdTQ1o1/QVRETmZTT05YMEdPSzhzNzNQOTMzNXU4WEdtbGxsaEhRM2lUZXRCRVFyTzhwSmZwN29DQVlWMEVZajBBbWc4V0ovekYya0NEdz09/660469b57c885a34"
+# __download_push 0.0.2 "Chrome 115.0.5790.136.apk" "https://dw.malavida.com/aHZyY1V5bWFzcmtWY2dDVUUyWGtlV1pvdmlBWmdyR1NrZVc5SmswMFovLzF3K2JhV0lpZm1La0YzUVpoTmZjSG9GT3E1L3pTSE5s/UHB6d0ZiSTM0UFg1aVltamN5VlZ5cVF0MnpwMU5nQUF4RkpFdXJsMEUxOUlXUTZFWUhZakdCT2hGWldnZW9yaUdIMzREdDZYZ3gy/SFozdkQza3BHTENjeG8rSUQxSEZQUEJTY0ZKRzE4UmpXeUhLOUwxOGc1U2UvRmY0SnhsSkk3dFQvNG5ISExFSGpTekZKMm0xYVND/cjdIaFJBeVl5WFRxRFNZTmkzd0dJdFF1S3pZaGxHbWRRZFRpV0pWUTdHUWVveW9JOURLYkthQXZkMHg4Tmd6c3RtVFpiVTRmUFp3/NFZmMXRjZUlUQWhPU2JtZ3R4L2RmUUlKVkhoSFBBRVpMTlduMkRYQnovMmxzSXkrdEVyOHFRd3MxcE5hdkJVbWdMKzd2Rlg4NWlP/RjNQYXhzbWlIaFhRZWlNNksxYTZpSmtnV0ZMNkoxR1NpbDRkN2FyK3IrcG9LNkxqZVREMGFoQitZTkVHNkNDdCs5MzJYSDZZRzFk/S254M014R2lxb2dmaTdxRVdoeEt1MWpScjN3YXBzQ0I3cFFZS2tXOGlLbjRqM1orT3MzZFg4NjU4cWd4U1U3QWVmK3NXazFVMU01/TS8waVBJRkZqTVVoTnMzU0RIRHVvSlBNLzA1V2poZEMvWEVQTlZEUktIdFpCVFR3ZnBEMVBBQjhiTnlIc3o4NkhLTXpLWk9UUT09/fca4d87e6f00c060"
+# __download_push 0.0.2 "Chrome 115.0.5790.138.apk" "https://dw.malavida.com/OFEyenZnY1hEWWpWcE1KUVlTeVlUWkpXcmV3aDBoWEZIanBGbzNYRXVhUXR1RVFNZnFuZTJxbFJQMWMxZndhYktIU1pPcStDaW1n/YStvV2VMMWx5Nnk5Z1dydlJDOXE3MnZrcDBYbVYrZVcybk1ITkRDdkpodVRwcWE1dUp3TDdUNENCQ1padCtHRmc3dnYzRDhTeThY/QUtFVWpYOWNaejB6VFdCZE9TYTZGRmdhRGk3WUdpeTFGSm9jVWlWMEIvK3I2TmFOdlpGSnBsNjRVN1VtUlFPTlQ3c0FnTFh3ZkVK/a2lSQ0wzSnVpWW92bUVvdE1PdkhUdDBwYWlMamExYjQwbFYrK0dZaDFOVDJaQUhtbklTdzVuRGdSWkJrQnFZYmNrZHVXUXpyQ3py/UEkraVFnVGZ2QW5HYXpPMGJOM2JhY2VvYkJCTURZaEFWOUpKV1RXZ1dQZ2w3T2FCcmdEcXpCeHg5T3dVNU1nanRCWVBXQUlXeExM/Rjc0eGpna3AvSXpsUDErVkhwcEJRRnhrNGZrSGVxZFMwcTV6b3UrZGFJUUVwY28rVEo5ODlDaFBhRjRmSWZ0VEo1NStDU1FPSkQ5/dTNFaWdxaHB3WGF3RTVPcERlOU1XbXhpb2xSZ2RDQkdUVUR6ODU5dklkZ1FINTkxSXdGT0hIbVd4ZUxMVWVEQVFvNXJKQ3g0OHBt/NkVHekZLTWJWdGQ5N0k4em1leG83YmUwN1ZRZE1DRFJxQWI3dUs3NHM0T0xtZWo5cXB4eDFEUC9JUGhsOWRYVXBvOC9lRE5rUT09/f3f93464f171871e"
+# __download_push 0.0.2 "Chrome 116.0.5845.92.apk"  "https://dw.malavida.com/cVNLUk9hMlJBaFQyY25oV1pFbVZwY1E0OXhIRERwdk9ONm1nQk1aV3BrZ0hKWHZFbG1IUTZzTFVCV08xVlFNa05Sai9RbnNlVGY5/MUVjcWtwSE15eEVQblV5RWhKVkFDRjcrbkJ4dTQ2MzNaVm9XVE1iUWYyVGpHWUwvb1N3UU1leUU0VjhhSFFNWXhqZE41a0dCejB2/ODcxTzZIbDdDNW5MM1V3UnQvbG04eUVYajZrWUpzQ29iVS9oa25LaHBSRXlYVXJ4WEhlTzFLNEdYVVJnVjlIZjlaaGI2M3hCOXd2/ZVA1OXU0NEJJdjdwMldOWVV4d2pXOG51TU9vU0xkZXpwUjFKa3J2d1R4QVNFdWZ1WjliN0JmNy83c2I1akx1MXcySHZ6YnpQNFpx/NTQvUUp6RE5Yb0trRUJKTVU3cElFWVJyRjBCQlhjMGtDMm9EMlRuS1o3Qmk2VTA3Z3pFODBvemRkZG1JdkRBNUYvY1NXM2o5YmJX/YmNOeFBGTG9YUFhYbmFzT3hVWHA0ODIyZjlrbnY3OFVRd2RLOHpIcXh1bTk2UVBEUU05OVd5UVE3WnNIRW9sSkFIN2FRTkVWcWRM/VzlpOXpScWhSV0l4QTRuRSsvK2dydEpwdG9PUUlNeW1NKy9MVi90NldVTk92ZmZNRHFaY3hRNHAyTFIyOEkvckNiaGZSVTRDcy9u/OXphUEg3NndqMDZCdUlLSlZKRS9CMHBPMVl4VG9lL1l3TmpOc01wWHhqTnVTbWgrczVlUHhvL0xtSmJFZ3ptaldiSzY3YmlqUT09/9ab23e71b03f5cf2"
+# __download_push 0.0.2 "Chrome 118.0.5993.48.apk"  "https://dw.malavida.com/ckxzUSs4SFd6QUN3SlZZMEVtS3plMWlKQXFwRGRXUGNNYzU5WUhNeFB4VE5WYStIRStPYjY3UndreTQwZEhwbnhxZURoUVE2dndo/NlpDdnI3R1ZaVFBoVHBnSWlCTGJXTXBHUzZxdGxJT252S2ZnSzVOYlNyeEQ3c2lCOTRjT2d4M2l5amZMY2QwSG5icHVkYVQxdVpY/cFJqbUtwemFNQ2JZM0F3SGdQaFIvVXcyVnp1eHJpb1VXMGVFQ0c5RUZpekFTelZaczVGaFA5T3V0M3dwM0ZLM3I3bXFITnJ2V0tm/MVcxblR6ZzhXY2ZORkREbThzbjJUVHZFQ1h2MnorbHljYmNhOENZUkpUYUt5cFlJbHMxdVMzcmpCUThNV2I4QXlLYnl6ZFRSSFBN/elpTaGY0K2xsZjBBZDUvNGlWYytmajlIdFUxYkNXbndtRDFJNWlxVFNuOUMvMG9abCtDOXRoVTc3ZVRXN3JBU0dPejlPNlljSVpm/WnphVkdXd3hObEhnSDlCSzUzM1FzbEMwbStnVmQweCtHVEVRbDhWVStoY0ViZ21lUUtYc1V0TnVuYWlVeHQ5N2ZycmVjUWFnbTRx/S3dXU2lMNkJCRCtaU09uN1FjeGppTzZLY0F2NVZuWE1CZlZnWVNVZ0wyck5nWWhtUjRwR2xBT3RHakxrUXVoV1BTNmpyWWVicHJy/M1J0UW9RZlk4alpjUjNCTGFPb0tjejIzODUybVRoMnBORVBGaDJXVTFIbHJocHdIQ01Wa21uU1RXaHhhd1pBMm1jaTloeDVkQT09/2c44958d4d5e01fe"
+# __download_push 0.0.2 "Chrome 128.0.6613.88.apk"  "https://dw.malavida.com/M2VZbjVQODBFZ0pFYVFIVEppMTY3Ly9iMzBCd1VGRlQ2czdwK0pzc3lBc1VQMVM4ZStoUW5GWVJTKzVHYWc4bmliR1pFTjF6RGpPbFZma3V/qa3FFemRJNTV6VktOS0RFMlRlZG43NXN2ZGdBL0JGczVnVkZhUHIxYmI2S1Z3TWZzRUxTOU9ldWFFcnNMSVM4R01nM3ZjL3J6akpRZXB4R0/w5MVNaMGVUTVpWS0dQMXhsS1N6MDdqSTFjWThkNmdKb0tsVVB2bVBhTnowcUxPdjZ1M2pMMFB6cUZjQVBIY3A2QmR3b3pPS0dRcEozNGswe/EhQZE5xQ3Eyb3ZpMllvakVHbE5aZ0FvdHNkME5aRHp5U1RZZ0gwRGRMKys1K0RyM1FaaE53OTUzalE1SkkzRk96K2krYUY5N3gvaEE0SzIv/N2tRRmFUM1dxOXZEQ3hhWWxTRUhnUm5rNU5vQUdQUUl6RlYySHZsSTRLdGFOSEZMWlE1QmFmeVR3NEkxemZvYXBGalJIOU5FUC85b1gxMmJ/ZNHFienpiVWRycXozV042MSsrWFU3TVNyNHhhRSs5NFc3OUJQcnBuTys2T3pGdE8vMmR2dUIzcnY3b3N1U1ZaYU5TQW1lVis3RjQrRnJpN2/tWelJMcGIvRUtYZ0J1WVdUK1Q1SGJ3dU1lb0VrczZYOExlNnhGcDlVdm1pYWNCWVU2bndqUXkwTFhLQ1VyMmRHeWhWVWlFUklSSHNlWnFVS/zBvWmk0RExJVlhqNVpJQ3NGa3YzcENucG83NktZdWhsdi84cVAwNmoyNGRkdEM2d1JreWNGVCtGbHVTYVNsQTQwcVF4WHFVbGZPUlMxWA==/15113ca759d864be"
+# __download_push 0.0.2 "Chrome 133.0.6943.39.apk"  "https://dw.malavida.com/TzNBak5HYTZKUkJaejduMUlYWUVqYkdicHVpVFVtL1N1cW41cFNvb2VIdWlpTFZCaU5NWDd1ZTd1YlBkUFpsVFl4NzJ2eXhrT2dvWmJNUmV/kWHR5TTZqbDR2NVpKalQvdS9xK3Nrd1l6WlMydjU1bHorR3JiRm91RHhtRUxIMEY3KzVHMUEwTXVxWE9WNERtTTg4NDA4cUQyZWdwakx0Y3/NML253NGdpVUNLWlBzbDhLaWFOUUFPOWFnZnM4RGVQdndlWHdWdGZjV2czUGlGY0dMT1RJRjBkM1VIaS9GWGQ1NmwwYm1rNnJCeFZ3ejBqZ/k9EUGhHbnVwcXJFNGxOUmtUYklhYWg5SUVzL1FyRGhZV2dQOHhaeUJkejRZS2lLK2xHS0xGRkFZWm9qdVBvNmxMS0JyeXg5Zzd3RkNiUEhG/VndiakpOY0wydFZhWTJDUlZKUHExQTh3eDR3MU4yckU0TXVyZXd4OE9SODJpck5VZEV5VUpBNEk0SmkwR2ZCc1M4d043STRWK1JweGlsOGh/jbzhpQ1pqbDZqZFJFSnNnbGRJdnVnMXRjWHFNWE9oMDFGMUh3aCt5QzdNRHJ4V29WNGV4dzFiQ3kwN1Yxb0FWU3grNDFWVllqMTUwWmdHNz/dyUXJHOFl0M2h1YXhYYzcvc3VtZXBwWTZ3dDB2ZHJ4c0lydWxjMGliOW9wT0hYcUREMHA0RUE4cjh6OWtoR29uU3ppaEttUHpmQUQ5MzFsR/HNFSnFrUVlxUUtOYk1QTlN2NG1aL0YxQVpMMXFoa0pRcFUvVFR5S3ZuMEJlN0JjOUVqNlQ0bG1QWUM3MWRyck5ya0JoWmZ2YktoQWZ3WA==/379d94865043e262"
+
+# __download_push 0.0.3 "QQ 8.9.28.apk"             "https://dw.malavida.com/OEt2NWFXMCtZckwxb09xOFkzNzh2SVY1K04zZnpsRDQ1MGpMMmN2MEJXQ05JcCtLVTd1bTNsU1ZML3NqUkRGLzRTazVOV1kxSHJ3/R0F6YkMvVklvemJJQlhScXpyUVptV0UycmlvNUlpek82c1NKUTJ3RHVpMmk2a2t3SkRVYWxPNkcya0pDQkV0WmJKM1RtSDVtSjZH/cDFCNFlGWmxrNStFeXlVMjlFT3pYUEVKTDJ3OHVDcjdOWHVFZnRBZTl2R2UwdDdVb2YrTWliYWtxaHpRQjhlYmI4VHVWaVdFcmxo/bG1DVk95d1JGZ0tjbHdEYitPMDh1aWhGZ1ZqOFUrR3ZReHcxZU5XREFqQ2NhOXczb2kyYmpvcS84emRXRmM3Z1FpZDNIUzJ2ZXlC/WDB0NE5jbkNTQ1JscUEyR3ZOd2dCbTVWVlNDZHpmRGVjaUswRWtsVjg0ZUZkZlQ5aDlveGd3T3IwZzYvYkxjeVE2eFN4MnJhck1C/WDc0L0JjT2ZpbStxMVAxd0lPLzVwWFU3WWhrUTdXeGNrbGhqTStqSExxblZkdmxxbnQxQTY1SjFyaVZENSs4YXB6cllzMVQwQ0tj/aVR1TGxacHZVblppUmVodjlPSHo0WG5DSFVkUzhIY1kzcFJ2RXFmN3FiRGI1R2Jqbm1HVEFSQ2xPMENDYUFIVVFHWVdmd2xrbk15/SFU5UmJYYWRUTzBNUm01V2Uxb2k1LzEvbVBKME9yc2JGRmp4UmVBNTQySkVMN0dOS3EwYXVUb2xmVU1xT01UVTQ3emVMOGJ0UT09/4803da65330a126f"
+
+# __download_push 0.0.4 "sqlite-amalgamation-3420000.zip" "https://www.sqlite.org/2023/sqlite-amalgamation-3420000.zip"
+# __download_push 0.0.4 "sqlite-amalgamation-3430100.zip" "https://www.sqlite.org/2023/sqlite-amalgamation-3430100.zip"
+
+# __download_push 0.0.5 "termux" "https://github.com/termux/termux-packages.git"
+
+  __download_push 0.0.6 "sdo_aia"

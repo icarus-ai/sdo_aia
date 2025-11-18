@@ -1,0 +1,113 @@
+#!/bin/sh
+
+RootSD=$(cd "$(dirname "$0")"; pwd)
+k_runtime=${HOME}/code/runtime
+
+Fun_Config()
+{
+	cd    ~/code
+	cd    ${PATH_PKG}
+	rm    src/bin/jp2/*.c
+	rm    src/bin/jp2/*.h
+	rm    src/bin/common/*.c
+	rm    src/bin/common/*.h
+	cp -R ../openjpeg_src/bin/* src/bin
+	ln -s ../common/comm        src/bin/jp2/comm
+	ln -s ../common             src/bin/jp2/common
+	cp    ../openjpeg_src/lib/* src/lib/openjp2
+	cp    ../openjpeg_src/*.txt .
+
+	rm   -rf build
+	mkdir -p build
+	cd       build
+
+	cmake -G"Unix Makefiles"                \
+		-DCMAKE_BUILD_TYPE=Release          \
+		-DCMAKE_INSTALL_PREFIX=${k_runtime} \
+			-DBUILD_SHARED_LIBS=OFF         \
+				-DBUILD_THIRDPARTY=ON       \
+				-DBUILD_LUTS_GENERATOR=ON   \
+				-DBUILD_CODEC=ON            \
+				-DOPJ_USE_THREAD=ON         \
+				-DOPJ_DISABLE_TPSOT_FIX=OFF \
+	${HOME}/code/${PATH_PKG}
+}
+
+Fun_Make()
+{
+	cd ~/code
+	cd ${PATH_PKG}/build
+	make -j${1}
+	make install
+}
+
+Fun_Build()
+{
+	PATH_PKG="openjpeg-${1}"
+
+	export CC=clang
+	clang --version
+
+	mkdir -p ~/code
+	cd       ~/code
+	tar -xzf ${RootSD}/code/${PATH_PKG}.tar.gz
+	tar -xzf ${RootSD}/code/openjpeg_src.tar.gz
+	#git clone https://github.com/icarus-ai/openjpeg
+
+	Fun_Config
+	Fun_Make 12
+
+	mv ${k_runtime}/bin/opj_decompress ${k_runtime}/bin/jp2image
+	cp ${k_runtime}/bin/jp2image       ${RootSD}/code
+}
+
+fn_pkt()
+{
+	mkdir -p ~/code
+	cd       ~/code
+	rm   -rf openjpeg_src
+	mkdir -p openjpeg_src/lib
+	mkdir -p openjpeg_src/bin
+	cd       openjpeg_src/bin
+	cp    -R ${RootSD}/Project/jni/src/openjpeg_src_bin/* .
+	mkdir -p common/comm
+	cp       ${RootSD}/Project/jni/class_kit/comm/def.h common/comm
+	cp       ${RootSD}/Project/jni/class_kit/comm/mem.h common/comm
+	echo     "#define KLOGS 2"                          >  common/comm/log.h
+	cat      ${RootSD}/Project/jni/class_kit/comm/log.h >> common/comm/log.h
+	mv       opj_utils.h                       jp2
+	cp       ${RootSD}/Project/jni/src/shell.c jp2/opj_decompress.c
+	cat      opj_args.c                     >> jp2/opj_decompress.c
+	cat      opj_utils.c                    >> jp2/opj_decompress.c
+	cat      opj_decompress_utils.c         >> jp2/opj_decompress.c
+	cat      jp2/king_cm.c                  >> jp2/convertpng.c
+	cat      common/opj_string.c            >> common/color.c
+	echo     "int main() { return 0; }" >  jp2/opj_dump.c
+	echo     "int main() { return 0; }" >  jp2/opj_compress.c
+	rm  -rf opj_args.c   \
+			opj_utils.c  \
+			opj_decompress_utils.c \
+			common/*.txt  \
+			common/*.in   \
+			common/opj_string.c \
+			jp2/*.txt     \
+			jp2/king_cm.c \
+			jp2/convertjpeg.c \
+			jp2/_
+	cd ~/code
+	cp ${RootSD}/Project/jni/static/include/libopenjpeg/openjpeg.h     openjpeg_src/lib
+	cp ${RootSD}/Project/jni/static/include/libopenjpeg/opj_clock_h    openjpeg_src/lib/opj_clock.h
+	cp ${RootSD}/Project/jni/static/include/libopenjpeg/CMakeLists.txt openjpeg_src
+	tar -czvf ${RootSD}/openjpeg_src.tar.gz openjpeg_src
+	exit
+}
+
+clear
+
+export PATH=${k_runtime}/bin:${PATH}
+
+#fn_pkt
+ Fun_Build 2.5.4
+#jp2image -threads ALL_CPUS -ImgDir ${RootSD}/_ -OutFor PNG
+
+# end

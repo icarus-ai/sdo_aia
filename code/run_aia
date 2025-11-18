@@ -1,0 +1,94 @@
+#!/bin/sh
+
+RootSD=$(cd "$(dirname "$0")"; pwd)
+
+#curl -o "xxx" "http://jsoc2.stanford.edu/data/aia/images/2025/11/15/193/2025_11_15__11_01_28_835__SDO_AIA_AIA_193.jp2"
+#rm   -rf xxx
+
+k_runtime=${RootSD}/code
+export PATH=${k_runtime}:${PATH}
+chmod  755  ${k_runtime}/jp2image
+
+fn_install()
+{
+	echo "      >>>>> install ${1}"
+	sudo apt-get install -y ${1} >/dev/null 2>/dev/null
+}
+
+fn_tar()
+{
+	echo ">>>>> >>>>> tarbz2 ${1}"
+	cd       ${RootSD}
+	tar -cvf ${1}.${2}.tar.bz2 ${1}
+}
+
+fn_run()
+{
+	case ${1} in
+	1)  echo "  > apt-get update"
+		sudo apt-get update >/dev/null 2>/dev/null
+		echo ">>>>> >>>>> make|run down project"
+		mkdir  -p ${RootSD}/aia
+		cd        ${RootSD}/aia
+		cp      ../code/fs_list_json .
+		if [ -e ../code/run_down ]; then
+			cp  ../code/run_down .
+		else
+			fn_install golang
+			go build -work -p 4 -ldflags "-s -w" -o run_down ../code/main.go
+		fi
+		chmod 755 run_down
+		./run_down
+		rm fs_list_json
+		mv run_down ..
+	;;
+	2) echo ">>>>> >>>>> jp2 -> png"
+		cd        ${RootSD}/aia
+		jp2image -threads ALL_CPUS -ImgDir . -OutFor PNG
+		rm -rf    *.jp2
+	;;
+	3) echo ">>>>> >>>>> png -> jpg"
+		fn_install imagemagick
+		cd        ${RootSD}/aia
+		for fs in $(ls | grep .png); do
+			convert ${fs} ${fs%.*}.jpg
+			rm   -f ${fs}
+		done
+	;;
+	4) echo ">>>>> >>>>> gen vodeo shell"
+		cd        ${RootSD}/aia
+		gcc       ../code/gen_shell.c -o ~/cshell
+		chmod     755                    ~/cshell
+		~/cshell  run_ffmpeg
+		cat       run_ffmpeg
+		rm        ~/cshell
+
+		echo ""
+		fn_install ffmpeg
+		echo "     >>>>> gen start"
+		bash      run_ffmpeg ../${1}
+		echo "     >>>>> gen end"
+
+		echo ">>>>> >>>>> ls jp2 and log"
+		ls | grep *.jp2
+		ls | grep *.log
+	;;
+	aia) echo ">>>>> >>>>> bug"
+		cd        ${RootSD}
+		rm   -rf  ${1}
+		curl -o   ${1}.${2}.tar.bz2 https://github.com/icarus-ai/sdo_aia/releases/download/v0.0.6/${1}.${2}.tar.bz2
+		tar  -xjf ${1}.${2}.tar.bz2
+		rm        ${1}.${2}.tar.bz2
+	;;
+	esac
+}
+
+#fn_run aia jp2
+fn_run 1
+#fn_run 2
+#fn_run 3
+#fn_run 4
+
+fn_tar aia jp2
+
+echo ">>>>> >>>>> end"
