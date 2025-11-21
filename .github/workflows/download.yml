@@ -1,0 +1,22 @@
+name: ci_code
+
+on:
+  push:
+    branches:
+      - 'main'
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  #ACTIONS_RUNNER_DEBUG: true
+
+jobs:
+  build:
+    name   : ci code
+    runs-on: ubuntu-latest
+    #permissions:
+    #  contents : write
+    steps:
+      - uses: actions/checkout@v4
+      - name: run code
+        run : bash ./ci_push
+
