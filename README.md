@@ -1,0 +1,3 @@
+# SDO AIA
+IMAGE: JP2000 -> JPG  
+VIDEO: 48h.mp4  

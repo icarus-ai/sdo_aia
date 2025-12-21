@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#if [[ -z "${GH_TOKEN}" ]]; then
+#	echo "Set the GH_TOKEN env variable."
+#	exit 1
+#fi
+
+RootSD=$(cd "$(dirname "$0")"; pwd)
+
+#set -e
+#set -o pipefail
+
+fn_upload()     { gh release upload ${2} ${3} -R ${1} --clobber; }
+fn_tag_is()     { gh release list --json tagName --jq '.[].tagName' -R ${1} | grep -q ${2}; }
+fn_tag_delete() { gh release delete ${2} --cleanup-tag -y -R ${1}; }
+fn_tag_create()
+{
+	echo "${4}" > note
+	gh release create ${2} -F ./note -t "${3}" -R ${1}
+	rm            note
+}
+
